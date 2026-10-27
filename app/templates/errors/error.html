@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="container error-container">
+  <div class="error-card">
+    <div class="error-code">{{ code }}</div>
+    <p class="error-message">{{ message }}</p>
+    <a class="btn btn-primary" href="{{ url_for('schedule.index') }}">חזרה ללוח</a>
+  </div>
+</main>
+{% endblock %}

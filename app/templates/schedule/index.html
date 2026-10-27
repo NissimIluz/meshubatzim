@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+{% set board_readonly = out_of_range %}
+
+<header class="app-header">
+  <div class="header-inner">
+    <h1 class="app-title">{{ app_title }}</h1>
+    <div class="header-actions">
+      <span id="presence" class="presence" hidden></span>
+      {% if edit_gate_on %}
+        {% if can_edit %}
+          <span class="edit-badge">מצב עריכה</span>
+          <form class="inline-form" action="{{ url_for('auth.logout') }}" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <button class="btn btn-ghost" type="submit">יציאה</button>
+          </form>
+        {% else %}
+          <a class="btn btn-primary" href="{{ url_for('auth.login', next=request.full_path) }}">כניסה לעריכה</a>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<main class="container" id="board" data-week="{{ week_key }}">
+  <div class="toolbar">
+    <div class="week-nav">
+      <a class="btn btn-nav" href="{{ url_for('schedule.index', week=prev_week) }}">‹ הקודם</a>
+      <a class="btn btn-nav {{ 'is-active' if is_current }}" href="{{ url_for('schedule.index', week=this_week_key) }}">השבוע</a>
+      <a class="btn btn-nav" href="{{ url_for('schedule.index', week=next_week) }}">הבא ›</a>
+    </div>
+
+    <div class="week-label">
+      שבוע מתאריך:
+      <strong>{{ greg(week_start) }}</strong> {{ heb_short(week_start) }}
+      –
+      <strong>{{ greg(week_end) }}</strong> {{ heb_short(week_end) }}
+    </div>
+
+    <div class="view-switch">
+      <button id="view-toggle" class="btn btn-toggle" type="button" aria-pressed="false">
+        <span class="label-table">⇄ תצוגת כרטיסים ▦</span>
+        <span class="label-cards">⇄ תצוגת טבלה ▤</span>
+      </button>
+    </div>
+  </div>
+
+  {% if important_notes %}
+    <div class="notes">
+      {% for note in important_notes %}
+        {% set tag = ('h' ~ note.h) if note.h else 'p' %}
+        <div class="note-banner note-{{ note.type }}" role="note">
+          <{{ tag }} class="note-text">{{ note.text }}</{{ tag }}>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if out_of_range %}
+    <div class="notice">
+      שבוע זה אינו קיים. ניתן ליצור עד {{ config.MAX_WEEKS_AHEAD }} שבועות קדימה בלבד —
+      הצפייה אפשרית אך לא ניתן לערוך.
+    </div>
+  {% endif %}
+
+  <div class="views">
+    {% include "schedule/_table_view.html" %}
+    {% include "schedule/_cards_view.html" %}
+  </div>
+</main>
+
+{% if can_edit and not out_of_range %}
+<div id="recurring-modal" class="modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="rec-title">
+    <h2 id="rec-title">שמירה כקבוע (חוזר)</h2>
+    <p class="modal-sub" id="rec-cell-label"></p>
+    <form method="post" action="{{ url_for('api.set_recurring') }}" class="modal-form"
+          hx-post="{{ url_for('api.set_recurring') }}" hx-swap="none">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ request.full_path }}">
+      <input type="hidden" name="day_index" id="rec-day">
+      <input type="hidden" name="shift" id="rec-shift">
+      <label>שם
+        <input name="assignee" id="rec-name" autocomplete="off" placeholder="(אפשר להשאיר ריק)">
+      </label>
+      <label>הערה
+        <input name="notes" id="rec-notes" autocomplete="off" placeholder="(אפשר להשאיר ריק)">
+      </label>
+      <div class="modal-row">
+        <label>מתאריך
+          <input type="date" name="effective_from" id="rec-from" value="{{ today.isoformat() }}">
+        </label>
+        <label><span class="date-label">עד תאריך <span id="rec-forever" class="forever-badge">∞ לעולמים</span></span>
+          <input type="date" name="effective_until" id="rec-until" aria-describedby="rec-forever rec-until-hint">
+        </label>
+      </div>
+      <p id="rec-until-hint" class="modal-hint" hidden>כדי לבחור „לעולמים”, יש לנקות את תאריך הסיום באמצעות לחיצה על Clear בבורר התאריך.</p>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">שמירה כקבוע</button>
+        <button type="button" class="btn btn-ghost" data-close>ביטול</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

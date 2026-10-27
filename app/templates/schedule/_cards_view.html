@@ -1,0 +1,20 @@
+<div class="cards-view">
+  {% for day in active_days %}
+    <section class="day-card" style="--day-color: {{ DAY_COLORS[day] }}">
+      <header class="day-card-head">
+        <span class="day-name">{{ day_name(day) }}</span>
+        <span class="day-sub">{{ greg(dates[day]) }} · {{ heb_short(dates[day]) }}</span>
+      </header>
+      <div class="day-card-body">
+        {% for shift in SHIFT_KEYS %}
+          <div class="card-slot">
+            <div class="card-slot-label">{{ shift_labels[shift] }}</div>
+            {% with slot = matrix.get((day, shift)) %}
+              {% include "schedule/_cell.html" %}
+            {% endwith %}
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
+</div>

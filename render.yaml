@@ -1,0 +1,31 @@
+# Render Blueprint (infrastructure as code).
+# Deploy: push to GitHub, then "New +" -> "Blueprint" in the Render dashboard.
+# NOTE: DATABASE_URL points to a managed Postgres (Neon / Supabase). Set the
+#       connection string (and secrets) in the dashboard — they are not in git.
+services:
+  - type: web
+    name: meshubatzim
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt && flask db upgrade"
+    startCommand: "gunicorn --worker-class gthread --workers 1 --threads 8 --bind 0.0.0.0:$PORT wsgi:app"
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: FLASK_APP
+        value: wsgi.py
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false          # paste the Neon/Supabase connection string here
+      - key: EDIT_PASSWORD
+        sync: false
+      - key: IMPORTANT_NOTE
+        sync: false
+      - key: APP_TITLE
+        value:  "לוח שיבוצים שבועי אילוז "
+      - key: MAX_WEEKS_AHEAD
+        value: "4"

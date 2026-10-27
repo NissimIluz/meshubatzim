@@ -1,0 +1,32 @@
+<div class="table-view">
+  <table class="schedule-table">
+    <thead>
+      <tr>
+        <th class="hours-col">שעות</th>
+        {% for day in active_days %}
+          <th class="day-col">
+            <span class="day-name">{{ day_name(day) }}</span>
+            <span class="day-date">{{ greg(dates[day]) }}</span>
+            <span class="day-heb">{{ heb_short(dates[day]) }}</span>
+          </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for shift in SHIFT_KEYS %}
+        <tr>
+          {% set hours = shift_labels[shift]|replace('–', '-')|replace('—', '-') %}
+          {% set parts = hours.split('-', 1) %}
+          <th class="shift-label" scope="row"><span class="shift-time" dir="ltr">{% if parts|length == 2 %}<span>{{ parts[0]|trim }}-</span><wbr><span>{{ parts[1]|trim }}</span>{% else %}{{ hours }}{% endif %}</span></th>
+          {% for day in active_days %}
+            <td class="cell-td">
+              {% with slot = matrix.get((day, shift)) %}
+                {% include "schedule/_cell.html" %}
+              {% endwith %}
+            </td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

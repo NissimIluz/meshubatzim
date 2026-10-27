@@ -1,0 +1,29 @@
+{% set editable = can_edit and not board_readonly|default(false) %}
+<div class="cell{{ ' is-empty' if not (slot and slot.assignee) }}{{ ' editable' if editable }}"
+     data-day="{{ day }}" data-shift="{{ shift }}"
+     data-day-name="{{ day_name(day) }}" data-shift-label="{{ shift_labels[shift] }}"
+     {% if editable %}data-editable="1" tabindex="0" role="button" aria-label="לחצו לעריכה"{% endif %}
+     style="--day-color: {{ DAY_COLORS[day] }}">
+  <div class="cell-view">
+    <span class="cell-name-text">{{ (slot.assignee if slot else '') or '' }}</span>
+    <span class="cell-notes-text">{{ (slot.notes if slot else '') or '' }}</span>
+  </div>
+  {% if editable %}
+  <form class="cell-form" hx-post="{{ url_for('api.update_slot') }}"
+        hx-target="closest .cell" hx-swap="outerHTML">
+    <input type="hidden" name="week" value="{{ week_key }}">
+    <input type="hidden" name="day_index" value="{{ day }}">
+    <input type="hidden" name="shift" value="{{ shift }}">
+    <input class="cell-name" name="assignee" placeholder="שם" autocomplete="off"
+           value="{{ (slot.assignee if slot else '') or '' }}">
+    <input class="cell-notes" name="notes" placeholder="הערה" autocomplete="off"
+           value="{{ (slot.notes if slot else '') or '' }}">
+    <div class="cell-actions">
+      <button class="cell-save" type="submit" aria-label="שמירה">✓</button>
+      <button class="cell-cancel" type="button" aria-label="ביטול">✕</button>
+      <button class="cell-pin" type="button" aria-label="שמירה כקבוע (חוזר)"
+              title="שמירה כקבוע (חוזר)">📌</button>
+    </div>
+  </form>
+  {% endif %}
+</div>
