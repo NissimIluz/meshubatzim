@@ -59,7 +59,7 @@
 
   {% if out_of_range %}
     <div class="notice">
-      שבוע זה אינו קיים. ניתן ליצור עד {{ config.MAX_WEEKS_AHEAD }} שבועות קדימה בלבד —
+      ניתן ליצור עד {{ config.MAX_WEEKS_AHEAD }} שבועות קדימה בלבד -
       הצפייה אפשרית אך לא ניתן לערוך.
     </div>
   {% endif %}
@@ -82,6 +82,7 @@
       <input type="hidden" name="next" value="{{ request.full_path }}">
       <input type="hidden" name="day_index" id="rec-day">
       <input type="hidden" name="shift" id="rec-shift">
+      <input type="hidden" name="on_conflict" id="rec-on-conflict" value="">
       <label>שם
         <input name="assignee" id="rec-name" autocomplete="off" placeholder="(אפשר להשאיר ריק)">
       </label>
@@ -97,6 +98,13 @@
         </label>
       </div>
       <p id="rec-until-hint" class="modal-hint" hidden>כדי לבחור „לעולמים”, יש לנקות את תאריך הסיום באמצעות לחיצה על Clear בבורר התאריך.</p>
+      <div id="rec-conflict-box" class="conflict-box" hidden>
+        <p id="rec-conflict-msg"></p>
+        <div class="conflict-actions">
+          <button type="button" class="btn btn-danger" data-conflict="overwrite">דרוס ושמור</button>
+          <button type="button" class="btn btn-ghost" data-conflict="skip">דלג ושמור (להשאיר קיימים)</button>
+        </div>
+      </div>
       <div class="modal-actions">
         <button type="submit" class="btn btn-primary">שמירה כקבוע</button>
         <button type="button" class="btn btn-ghost" data-close>ביטול</button>

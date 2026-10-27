@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date
 
 from flask import (
@@ -94,24 +95,54 @@ def set_recurring():
     if shift not in current_app.config["SHIFT_NAMES"] or not (0 <= day_index <= 6):
         return "bad cell", 400
 
+    assignee = request.form.get("assignee", "")
+    notes = request.form.get("notes", "")
     effective_from = parse_date(request.form.get("effective_from")) or date.today()
     effective_until = parse_date(request.form.get("effective_until"))  # None = forever
+    on_conflict = request.form.get("on_conflict", "").strip().lower()  # "", skip, overwrite
+    htmx = request.headers.get("HX-Request")
 
-    recurring_service.set_template(
-        day_index,
-        shift,
-        request.form.get("assignee", ""),
-        request.form.get("notes", ""),
-        effective_from,
-        effective_until=effective_until,
+    empty, conflict = recurring_service.classify_existing(
+        day_index, shift, assignee, notes, effective_from, effective_until
     )
 
-    # HTMX submit -> no page reload: 204 + a client event to close + toast.
-    if request.headers.get("HX-Request"):
+    # Existing cells with different values -> ask before overwriting.
+    if conflict and on_conflict not in ("overwrite", "skip"):
+        dates = [cell_date.isoformat() for _week, cell_date in conflict]
+        if htmx:
+            resp = make_response("", 200)
+            resp.headers["HX-Trigger"] = json.dumps(
+                {"recurring-conflict": {"count": len(conflict), "dates": dates}}
+            )
+            return resp
+        on_conflict = "skip"  # no-JS fallback: safe default (don't overwrite)
+
+    # Persist the template, then apply to existing boards within the window.
+    recurring_service.set_template(
+        day_index, shift, assignee, notes, effective_from,
+        effective_until=effective_until,
+    )
+    targets = list(empty)
+    if on_conflict == "overwrite":
+        targets += [week for week, _date in conflict]
+
+    actor = current_actor()
+    changed = recurring_service.apply_value_to_weeks(
+        targets, day_index, shift, assignee, notes, user=actor
+    )
+    for slot in changed:
+        week_key = slot.week.start_date.isoformat()
+        socketio.emit(
+            "slot_updated",
+            {"week": week_key, "editor": actor, **slot.to_dict()},
+            room=room_for_week(week_key),
+        )
+
+    if htmx:
         resp = make_response("", 204)
-        resp.headers["HX-Trigger"] = "recurring-saved"
+        resp.headers["HX-Trigger"] = json.dumps({"recurring-saved": {"applied": len(changed)}})
         return resp
 
     # No-JS fallback: flash + redirect (full reload).
-    flash("נשמר כקבוע (חוזר). יועתק אוטומטית ללוחות חדשים.")
+    flash(f"נשמר כקבוע (חוזר). עודכנו {len(changed)} תאים בלוחות קיימים.")
     return redirect(local_redirect_target(request.form.get("next")))

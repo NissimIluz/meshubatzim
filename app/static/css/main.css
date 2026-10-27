@@ -91,6 +91,8 @@ html, body {
   font-weight: 700; box-shadow: var(--shadow-sm);
 }
 .btn-toggle:hover { background: var(--primary); color: #fff; }
+.btn-danger { background: var(--danger); color: #fff; border: none; }
+.btn-danger:hover { background: #a5281b; }
 
 /* ---------- Toolbar ---------- */
 .toolbar {
@@ -334,6 +336,15 @@ html, body {
 .modal-hint { font-size: .82rem; color: var(--muted); margin: 0; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-start; margin-top: 4px; }
 body.modal-open { overflow: hidden; }
+
+/* ---------- Recurring conflict confirmation ---------- */
+.conflict-box {
+  background: #fdecea; border: 1px solid #f3b4ad;
+  border-radius: var(--radius-sm); padding: 10px 12px;
+}
+.conflict-box[hidden] { display: none; }
+.conflict-box p { margin: 0 0 8px; color: #9b241a; font-weight: 600; font-size: .9rem; }
+.conflict-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* ---------- Toast ---------- */
 .toast {

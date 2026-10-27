@@ -208,6 +208,16 @@
     var untilInput = modal.querySelector("#rec-until");
     var foreverBadge = modal.querySelector("#rec-forever");
     var untilHint = modal.querySelector("#rec-until-hint");
+    var form = modal.querySelector(".modal-form");
+    var onConflict = modal.querySelector("#rec-on-conflict");
+    var conflictBox = modal.querySelector("#rec-conflict-box");
+    var conflictMsg = modal.querySelector("#rec-conflict-msg");
+    var originCell = null;  // the cell the modal was opened from
+
+    function resetConflict() {
+      onConflict.value = "";
+      conflictBox.hidden = true;
+    }
 
     function updateEndDateLabel() {
       foreverBadge.hidden = Boolean(untilInput.value);
@@ -218,9 +228,17 @@
     updateEndDateLabel();
 
     function open(cell) {
+      originCell = cell;
       updateEndDateLabel();
+      resetConflict();
       modal.querySelector("#rec-day").value = cell.dataset.day;
       modal.querySelector("#rec-shift").value = cell.dataset.shift;
+      // Default "from date" = this cell's actual date (not today).
+      var board = document.getElementById("board");
+      var dayIndex = parseInt(cell.dataset.day, 10);
+      if (board && board.dataset.week && !isNaN(dayIndex)) {
+        modal.querySelector("#rec-from").value = cellDateISO(board.dataset.week, dayIndex);
+      }
       var name = cell.querySelector(".cell-name");
       var notes = cell.querySelector(".cell-notes");
       modal.querySelector("#rec-name").value = name ? name.value : "";
@@ -239,11 +257,20 @@
     }
 
     document.addEventListener("click", function (e) {
-      var pin = e.target.closest(".cell-recurring");
-      if (pin) {
+      var trigger = e.target.closest(".cell-recurring");
+      if (trigger) {
         e.preventDefault();
-        var cell = pin.closest(".cell");
+        var cell = trigger.closest(".cell");
         if (cell) open(cell);
+        return;
+      }
+      // Conflict choice: set the decision and resubmit the same form.
+      var choice = e.target.closest("[data-conflict]");
+      if (choice && !modal.hidden) {
+        onConflict.value = choice.getAttribute("data-conflict");
+        conflictBox.hidden = true;
+        if (form.requestSubmit) form.requestSubmit();
+        else form.submit();
         return;
       }
       if (!modal.hidden && e.target.closest("[data-close]")) close();
@@ -253,11 +280,47 @@
       if (e.key === "Escape" && !modal.hidden) close();
     });
 
-    // Saved via HTMX (no page reload): close the modal + show a toast.
-    document.body.addEventListener("recurring-saved", function () {
-      close();
-      showToast("נשמר כקבוע (חוזר) — יועתק אוטומטית ללוחות חדשים");
+    // Existing cells differ -> ask the user before overwriting (modal stays open).
+    document.body.addEventListener("recurring-conflict", function (e) {
+      var detail = e.detail || {};
+      var dates = (detail.dates || []).map(fmtDay).join(", ");
+      conflictMsg.textContent =
+        "יש " + (detail.count || 0) + " שיבוצים קיימים בערכים שונים" +
+        (dates ? " (" + dates + ")" : "") + ". לדרוס אותם או להשאיר?";
+      conflictBox.hidden = false;
     });
+
+    // Saved (HTMX, no page reload): close the modal + toast.
+    document.body.addEventListener("recurring-saved", function (e) {
+      var applied = (e.detail && e.detail.applied) || 0;
+      resetConflict();
+      // Flush any pending inline edit to this week, then close the cell editor.
+      // Incoming recurring updates (if any) render the new data via the broadcast.
+      if (originCell) {
+        saveCell(originCell);
+        exitEdit(originCell);
+        originCell = null;
+      }
+      close();
+      showToast(applied > 0
+        ? "נשמר כקבוע — עודכנו " + applied + " תאים בלוחות קיימים"
+        : "נשמר כקבוע (חוזר) — יועתק אוטומטית ללוחות חדשים");
+    });
+  }
+
+  function fmtDay(iso) {
+    var p = String(iso).split("-");
+    return p.length === 3 ? p[2] + "." + p[1] : iso;
+  }
+
+  // Cell date = week's Sunday + dayIndex (UTC math avoids timezone drift).
+  function cellDateISO(weekSunday, dayIndex) {
+    var p = weekSunday.split("-");
+    var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+    d.setUTCDate(d.getUTCDate() + dayIndex);
+    var mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    var dd = String(d.getUTCDate()).padStart(2, "0");
+    return d.getUTCFullYear() + "-" + mm + "-" + dd;
   }
 
   /* ---------- Toast ---------- */
