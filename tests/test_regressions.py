@@ -5,6 +5,9 @@ from datetime import date
 from pathlib import Path
 from threading import Barrier
 from unittest.mock import patch
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from flask.testing import FlaskClient
 
 from app import create_app
 from app.extensions import db
@@ -12,6 +15,16 @@ from app.models import Slot, Week
 from app.security import local_redirect_target
 from app.services import recurring_service, slot_service, week_service
 from config import Config
+
+
+class GroupClient(FlaskClient):
+    def open(self, *args, **kwargs):
+        if args and isinstance(args[0], str):
+            parsed = urlsplit(args[0])
+            query = parse_qsl(parsed.query, keep_blank_values=True)
+            query.append(("groupId", "test-group"))
+            args = (urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment)), *args[1:])
+        return super().open(*args, **kwargs)
 
 
 class RegressionTests(unittest.TestCase):
@@ -22,6 +35,7 @@ class RegressionTests(unittest.TestCase):
 
         class TestConfig(Config):
             TESTING = True
+            GROUP_ID = "test-group"
             SQLALCHEMY_DATABASE_URI = "sqlite:///" + self.path.as_posix()
             SOCKETIO_MESSAGE_QUEUE = None
             LOG_REQUESTS = False
@@ -34,6 +48,7 @@ class RegressionTests(unittest.TestCase):
             RULES = []
 
         self.app = create_app(TestConfig)
+        self.app.test_client_class = GroupClient
         with self.app.app_context():
             db.create_all()
 
@@ -90,17 +105,44 @@ class RegressionTests(unittest.TestCase):
     def test_all_redirect_routes_reject_external_next(self):
         with self.app.test_client() as client:
             response = client.post("/auth/login", data={"password": "test-password", "next": "https://evil.example"})
-            self.assertEqual(response.headers["Location"], "/")
+            self.assertEqual(response.headers["Location"], "/?groupId=test-group")
             response = client.post("/api/recurring", data={"day_index": "0", "shift": "morning", "next": "//evil.example"})
-            self.assertEqual(response.headers["Location"], "/")
+            self.assertEqual(response.headers["Location"], "/?groupId=test-group")
             response = client.post("/auth/logout", data={"next": "https://evil.example"})
-            self.assertEqual(response.headers["Location"], "/")
+            self.assertEqual(response.headers["Location"], "/?groupId=test-group")
 
     def test_login_preserves_local_week_destination(self):
         with self.app.test_client() as client:
             destination = "/?week=2026-11-01"
             response = client.post("/auth/login", data={"password": "test-password", "next": destination})
-            self.assertEqual(response.headers["Location"], destination)
+            self.assertEqual(response.headers["Location"], destination + "&groupId=test-group")
+
+    def test_group_required_on_all_http_and_socket_transport_requests(self):
+        client = FlaskClient(self.app)
+        for path in ["/", "/auth/login", "/api/slot", "/static/css/main.css", "/socket.io/?EIO=4&transport=polling"]:
+            for group in ["", "groupId=wrong", "groupId=test-group&groupId=wrong"]:
+                separator = "&" if "?" in path else "?"
+                with self.subTest(path=path, group=group):
+                    self.assertEqual(client.get(path + separator + group).status_code, 403)
+        self.assertEqual(client.post("/api/slot", data={"groupId": "test-group"}).status_code, 403)
+        with client.get("/static/css/main.css?groupId=test-group") as response:
+            self.assertEqual(response.status_code, 200)
+        response = client.get("/socket.io/?EIO=4&transport=polling&groupId=test-group")
+        self.assertEqual(response.status_code, 200)
+
+    def test_missing_group_configuration_denies_access(self):
+        self.app.config["GROUP_ID"] = ""
+        self.assertEqual(FlaskClient(self.app).get("/?groupId=test-group").status_code, 403)
+
+    def test_authorized_page_preserves_group_without_granting_edit_access(self):
+        client = FlaskClient(self.app)
+        response = client.get("/?groupId=test-group")
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        self.assertIn("/static/css/main.css?groupId=test-group", html)
+        self.assertIn("groupId=test-group", html)
+        self.assertEqual(response.headers["Referrer-Policy"], "same-origin")
+        self.assertEqual(client.post("/api/slot?groupId=test-group").status_code, 403)
 
 
 if __name__ == "__main__":

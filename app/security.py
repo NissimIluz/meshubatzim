@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from functools import wraps
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from flask import abort, current_app, redirect, request, session, url_for
 
@@ -18,7 +18,14 @@ def local_redirect_target(value: str | None) -> str:
         parsed = urlsplit(value)
     except ValueError:
         return fallback
-    return fallback if parsed.scheme or parsed.netloc else value
+    if parsed.scheme or parsed.netloc:
+        return fallback
+    group = request.args.get("groupId")
+    if group:
+        query = [(key, val) for key, val in parse_qsl(parsed.query, keep_blank_values=True) if key != "groupId"]
+        query.append(("groupId", group))
+        return urlunsplit(("", "", parsed.path, urlencode(query), parsed.fragment))
+    return value
 
 
 def can_edit() -> bool:

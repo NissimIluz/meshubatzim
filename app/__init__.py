@@ -30,6 +30,9 @@ def create_app(config_class: type[Config] | None = None) -> Flask:
     _register_observability(app)
     _register_template_context(app)
     _register_cli(app)
+    from app.group_auth import register_group_auth
+
+    register_group_auth(app)
 
     return app
 

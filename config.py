@@ -181,6 +181,7 @@ class Config:
 
     # ---- Core ----
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-change-me")
+    GROUP_ID = os.getenv("GROUP_ID", "")
     APP_TITLE = os.getenv("APP_TITLE", "לוח שיבוצים שבועי אילוז ")
     TIMEZONE = os.getenv("TIMEZONE", "Asia/Jerusalem")
 

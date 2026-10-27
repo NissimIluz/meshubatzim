@@ -14,8 +14,12 @@ test('initial connection joins the week; reconnect reloads current board state',
   };
   const context = {
     document: { readyState: 'loading', addEventListener() {} },
-    window: { location: { reload: () => { reloads++; } } },
-    io: () => socket,
+    URLSearchParams,
+    window: { location: { search: '?groupId=test-group', reload: () => { reloads++; } } },
+    io: options => {
+      assert.equal(options.query.groupId, 'test-group');
+      return socket;
+    },
   };
   const source = fs.readFileSync(path.join(__dirname, '../app/static/js/app.js'), 'utf8')
     .replace('if (document.readyState ===', 'globalThis.startRealtime = setupRealtime;\n  if (document.readyState ===');

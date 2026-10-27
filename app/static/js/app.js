@@ -179,7 +179,8 @@
   /* ---------- Realtime (Socket.IO) ---------- */
   function setupRealtime(week) {
     if (typeof io === "undefined" || !week) return;
-    var socket = io();
+    var groupId = new URLSearchParams(window.location.search).get("groupId");
+    var socket = io({ query: { groupId: groupId } });
     var hasConnected = false;
 
     socket.on("connect", function () {

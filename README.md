@@ -41,6 +41,11 @@ partial, without touching the core.
 
 ## Local development
 
+Set `GROUP_ID` in `.env` (and in the production environment). Open the board
+with `/?groupId=YOUR_VALUE`. Every request, including static assets and
+Socket.IO, requires this query parameter; links and forms preserve it.
+Missing/incorrect values, or an unset `GROUP_ID`, return HTTP 403.
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
