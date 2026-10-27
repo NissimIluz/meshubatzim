@@ -117,6 +117,21 @@ class RegressionTests(unittest.TestCase):
             response = client.post("/auth/login", data={"password": "test-password", "next": destination})
             self.assertEqual(response.headers["Location"], destination + "&groupId=test-group")
 
+    def test_autosave_returns_json_and_marks_own_broadcast(self):
+        with self.app.test_client() as client:
+            client.post("/auth/login", data={"password": "test-password"})
+            with patch.object(week_service, "is_creatable", return_value=True), patch(
+                "app.blueprints.api.routes.socketio.emit"
+            ) as emit:
+                response = client.post("/api/slot", data={
+                    "week": "2026-11-01", "day_index": "0", "shift": "morning",
+                    "assignee": "Autosaved", "notes": "Note",
+                }, headers={"Accept": "application/json", "X-Client-ID": "browser-token"})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json["assignee"], "Autosaved")
+            self.assertEqual(response.json["notes"], "Note")
+            self.assertEqual(emit.call_args_list[0].args[1]["client_id"], "browser-token")
+
     def test_group_required_on_all_http_and_socket_transport_requests(self):
         client = FlaskClient(self.app)
         for path in ["/", "/auth/login", "/api/slot", "/static/css/main.css", "/socket.io/?EIO=4&transport=polling"]:

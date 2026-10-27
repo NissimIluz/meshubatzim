@@ -1,12 +1,15 @@
 /* Meshubatzim – client logic: view toggle, click-to-edit, realtime. */
 (function () {
   "use strict";
+  var pageClientId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  var saveStates = new WeakMap();
 
   function init() {
     var board = document.getElementById("board");
     if (!board) return;
     setupViewToggle(board);
     setupClickEdit();
+    setupAutosave();
     setupRecurringModal();
     setupRealtime(board.dataset.week);
   }
@@ -40,6 +43,8 @@
   function enterEdit(cell) {
     if (cell.classList.contains("is-editing")) return;
     cell.classList.add("is-editing");
+    var state = saveState(cell);
+    if (!state.dirty && !state.saving) setSaveStatus(cell, "");
     var name = cell.querySelector(".cell-name");
     if (name) {
       name.focus();
@@ -47,37 +52,130 @@
     }
   }
 
-  function exitEdit(cell, revert) {
+  function exitEdit(cell) {
     if (!cell.classList.contains("is-editing")) return;
     cell.classList.remove("is-editing");
-    if (revert) {
-      var name = cell.querySelector(".cell-name");
-      var notes = cell.querySelector(".cell-notes");
-      var nameText = cell.querySelector(".cell-name-text");
-      var notesText = cell.querySelector(".cell-notes-text");
-      if (name && nameText) name.value = nameText.textContent.trim();
-      if (notes && notesText) notes.value = notesText.textContent.trim();
+  }
+
+  function saveState(cell) {
+    if (!saveStates.has(cell)) {
+      saveStates.set(cell, { revision: 0, dirty: false, saving: false, timer: null });
     }
+    return saveStates.get(cell);
+  }
+
+  function setSaveStatus(cell, status) {
+    var indicator = cell.querySelector(".cell-save-status");
+    if (!indicator) return;
+    var state = saveState(cell);
+    clearTimeout(state.statusTimer);
+    var close = cell.querySelector(".cell-close");
+    if (close) close.hidden = status !== "";
+    indicator.dataset.state = status;
+    indicator.textContent = status === "saved" ? "✓" : status === "error" ? "!" : "";
+    indicator.setAttribute("aria-label", status === "saving" ? "שומר שינויים" : status === "saved" ? "נשמר" : status === "error" ? "השמירה נכשלה. יש לנסות שוב" : "");
+    cell.setAttribute("aria-busy", status === "saving" ? "true" : "false");
+    if (status === "saved") {
+      state.statusTimer = setTimeout(function () {
+        if (!state.dirty && !state.saving) setSaveStatus(cell, "");
+      }, 1600);
+    }
+  }
+
+  async function saveCell(cell) {
+    var state = saveState(cell);
+    clearTimeout(state.timer);
+    state.timer = null;
+    if (!state.dirty || state.saving) return;
+    var revision = state.revision;
+    var form = cell.querySelector(".cell-form");
+    state.saving = true;
+    state.dirty = false;
+    setSaveStatus(cell, "saving");
+    try {
+      var response = await fetch(form.action, {
+        method: "POST",
+        keepalive: true,
+        headers: {
+          "Accept": "application/json",
+          "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').content,
+          "X-Client-ID": pageClientId
+        },
+        body: new FormData(form)
+      });
+      if (!response.ok) throw new Error("Save failed");
+      var data = await response.json();
+      if (state.revision === revision) {
+        document.querySelectorAll(cellSelector(data)).forEach(function (other) {
+          if (other === cell) renderCellData(other, data);
+          else applyCellUpdate(other, data);
+        });
+        setSaveStatus(cell, "saved");
+      }
+    } catch (error) {
+      if (state.revision === revision) {
+        state.dirty = true;
+        setSaveStatus(cell, "error");
+      }
+    } finally {
+      state.saving = false;
+      // Serialize saves so an older request cannot overwrite newer typing.
+      if (state.dirty && state.revision !== revision && !state.timer) saveCell(cell);
+    }
+  }
+
+  function setupAutosave() {
+    document.addEventListener("input", function (event) {
+      if (!event.target.matches(".cell-name, .cell-notes")) return;
+      var cell = event.target.closest(".cell");
+      var state = saveState(cell);
+      state.revision++;
+      clearTimeout(state.timer);
+      state.timer = null;
+      if (!state.saving &&
+          cell.querySelector(".cell-name").value.trim() === cell.querySelector(".cell-name-text").textContent.trim() &&
+          cell.querySelector(".cell-notes").value.trim() === cell.querySelector(".cell-notes-text").textContent.trim()) {
+        state.dirty = false;
+        setSaveStatus(cell, "");
+        return;
+      }
+      state.dirty = true;
+      setSaveStatus(cell, "saving");
+      state.timer = setTimeout(function () {
+        state.timer = null;
+        saveCell(cell);
+      }, 600);
+    });
+    document.addEventListener("submit", function (event) {
+      if (!event.target.matches(".cell-form")) return;
+      event.preventDefault();
+      saveCell(event.target.closest(".cell"));
+    });
   }
 
   function setupClickEdit() {
     // Open the editor when an editable cell (in view mode) is clicked.
     document.addEventListener("click", function (e) {
-      var cancel = e.target.closest(".cell-cancel");
-      if (cancel) {
-        var editingCell = cancel.closest(".cell");
-        if (editingCell) exitEdit(editingCell, true);
+      var close = e.target.closest(".cell-close");
+      if (close) {
+        var closingCell = close.closest(".cell");
+        saveCell(closingCell);
+        exitEdit(closingCell);
+        closingCell.focus();
         return;
       }
       var cell = e.target.closest(".cell.editable");
       if (cell && !cell.classList.contains("is-editing")) enterEdit(cell);
     });
 
-    // Keyboard: Enter/Space opens; Escape cancels.
+    // Keyboard: Enter/Space opens; Escape closes and saves pending changes.
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
         var editing = e.target.closest(".cell.is-editing");
-        if (editing) exitEdit(editing, true);
+        if (editing) {
+          saveCell(editing);
+          exitEdit(editing);
+        }
         return;
       }
       if (e.key === "Enter" || e.key === " ") {
@@ -89,8 +187,7 @@
       }
     });
 
-    // Click/focus away from an editing cell cancels (discards unsaved input),
-    // unless focus moved into the recurring modal (keep the edit alive behind it).
+    // Leaving a cell flushes pending changes instead of discarding them.
     document.addEventListener("focusout", function (e) {
       var cell = e.target.closest(".cell.is-editing");
       if (!cell) return;
@@ -98,7 +195,8 @@
         var active = document.activeElement;
         if (cell.contains(active)) return;
         if (active && active.closest && active.closest("#recurring-modal")) return;
-        exitEdit(cell, true);
+        saveCell(cell);
+        exitEdit(cell);
       }, 0);
     });
   }
@@ -141,7 +239,7 @@
     }
 
     document.addEventListener("click", function (e) {
-      var pin = e.target.closest(".cell-pin");
+      var pin = e.target.closest(".cell-recurring");
       if (pin) {
         e.preventDefault();
         var cell = pin.closest(".cell");
@@ -214,25 +312,42 @@
   }
 
   function applyRemoteUpdate(data) {
-    var selector = '.cell[data-day="' + data.day_index + '"][data-shift="' + data.shift + '"]';
-    document.querySelectorAll(selector).forEach(function (cell) {
-      // Incoming state replaces the draft and returns the cell to view mode.
-      exitEdit(cell, false);
-      if (cell.contains(document.activeElement)) document.activeElement.blur();
-
-      var nameInput = cell.querySelector(".cell-name");
-      var notesInput = cell.querySelector(".cell-notes");
-      if (nameInput) nameInput.value = data.assignee || "";
-      if (notesInput) notesInput.value = data.notes || "";
-
-      var nameText = cell.querySelector(".cell-name-text");
-      var notesText = cell.querySelector(".cell-notes-text");
-      if (nameText) nameText.textContent = data.assignee || "";
-      if (notesText) notesText.textContent = data.notes || "";
-
-      cell.classList.toggle("is-empty", !data.assignee);
-      flash(cell);
+    // Our own broadcast may arrive before the HTTP response; keep typing intact.
+    if (data.client_id === pageClientId) return;
+    document.querySelectorAll(cellSelector(data)).forEach(function (cell) {
+      applyCellUpdate(cell, data);
     });
+  }
+
+  function cellSelector(data) {
+    return '.cell[data-day="' + data.day_index + '"][data-shift="' + data.shift + '"]';
+  }
+
+  function applyCellUpdate(cell, data) {
+    var state = saveState(cell);
+    clearTimeout(state.timer);
+    state.timer = null;
+    state.revision++;
+    state.dirty = false;
+    exitEdit(cell);
+    if (cell.contains(document.activeElement)) document.activeElement.blur();
+    renderCellData(cell, data);
+    setSaveStatus(cell, "");
+    flash(cell);
+  }
+
+  function renderCellData(cell, data) {
+    var nameInput = cell.querySelector(".cell-name");
+    var notesInput = cell.querySelector(".cell-notes");
+    if (nameInput) nameInput.value = data.assignee || "";
+    if (notesInput) notesInput.value = data.notes || "";
+
+    var nameText = cell.querySelector(".cell-name-text");
+    var notesText = cell.querySelector(".cell-notes-text");
+    if (nameText) nameText.textContent = data.assignee || "";
+    if (notesText) notesText.textContent = data.notes || "";
+
+    cell.classList.toggle("is-empty", !data.assignee);
   }
 
   function flash(el) {

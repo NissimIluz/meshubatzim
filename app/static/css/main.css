@@ -173,6 +173,7 @@ html, body {
    Cell (shared by table + cards)
    ============================================================ */
 .cell {
+  position: relative;
   background: var(--day-color, #fff);
   min-height: 86px; height: 100%;
   display: grid; align-items: center;
@@ -214,17 +215,36 @@ html, body {
   outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(47, 109, 240, .15);
 }
 .cell-name::placeholder, .cell-notes::placeholder { color: #9aa3b2; font-weight: 400; }
-.cell-actions { display: flex; gap: 6px; justify-content: center; margin-top: 2px; }
-.cell-save, .cell-cancel, .cell-pin {
-  width: 28px; height: 28px; border-radius: 50%; border: none;
-  cursor: pointer; font-size: .9rem; line-height: 1;
+.cell-actions { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 6px; margin-top: 2px; }
+.cell-save-control { display: flex; align-items: center; justify-content: center; min-width: 0; height: 30px; }
+.cell-close {
+  width: 100%; height: 30px; padding: 0; border: 1px solid var(--line);
+  border-radius: 6px; background: #fff; color: var(--muted);
+  font: inherit; font-size: 1.2rem; cursor: pointer;
 }
-.cell-save { background: var(--primary); color: #fff; }
-.cell-save:hover { background: var(--primary-700); }
-.cell-cancel { background: #e4e7ee; color: #444; }
-.cell-cancel:hover { background: #d4d8e2; }
-.cell-pin { background: #fff; border: 1px solid var(--line); font-size: .8rem; }
-.cell-pin:hover { background: #f1f3f8; }
+.cell-close:hover { background: #f1f3f8; color: var(--ink); }
+.cell-close[hidden] { display: none; }
+.cell-recurring {
+  width: 100%; min-height: 30px; padding: 4px; border-radius: 6px;
+  border: 1px solid var(--line); background: #fff; color: var(--navy);
+  font: inherit; font-size: .72rem; line-height: 1.3; cursor: pointer;
+}
+.cell-recurring:hover { background: #f1f3f8; }
+.cell-save-status {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; min-height: 18px; border-radius: 50%;
+  background: #fff; color: #16803c; font-size: .8rem; pointer-events: none;
+}
+.cell-save-status:empty:not([data-state="saving"]) { display: none; }
+.cell-save-status[data-state="saving"]::before {
+  content: ""; width: 12px; height: 12px; border: 2px solid #cbd5e1;
+  border-top-color: var(--primary); border-radius: 50%; animation: saving-spin .7s linear infinite;
+}
+.cell-save-status[data-state="error"] { color: var(--danger); border-radius: 5px; padding: 2px 5px; }
+@keyframes saving-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .cell-save-status[data-state="saving"]::before { animation: none; }
+}
 
 /* Table mode: keep an editing cell the SAME size as in view mode (no growth,
    no column widening). Cards mode keeps its roomier editor. */
@@ -232,9 +252,7 @@ html, body {
 .table-view .cell-name { padding: 3px 7px; font-size: .92rem; }
 .table-view .cell-notes { padding: 3px 7px; font-size: .76rem; }
 .table-view .cell-actions { margin-top: 1px; gap: 5px; }
-.table-view .cell-save,
-.table-view .cell-cancel,
-.table-view .cell-pin { width: 22px; height: 22px; font-size: .72rem; }
+.table-view .cell-recurring { font-size: .65rem; }
 
 /* ============================================================
    Cards view

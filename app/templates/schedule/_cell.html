@@ -9,8 +9,7 @@
     <span class="cell-notes-text">{{ (slot.notes if slot else '') or '' }}</span>
   </div>
   {% if editable %}
-  <form class="cell-form" hx-post="{{ url_for('api.update_slot') }}"
-        hx-target="closest .cell" hx-swap="outerHTML">
+  <form class="cell-form" action="{{ url_for('api.update_slot') }}" method="post">
     <input type="hidden" name="week" value="{{ week_key }}">
     <input type="hidden" name="day_index" value="{{ day }}">
     <input type="hidden" name="shift" value="{{ shift }}">
@@ -19,10 +18,11 @@
     <input class="cell-notes" name="notes" placeholder="הערה" autocomplete="off"
            value="{{ (slot.notes if slot else '') or '' }}">
     <div class="cell-actions">
-      <button class="cell-save" type="submit" aria-label="שמירה">✓</button>
-      <button class="cell-cancel" type="button" aria-label="ביטול">✕</button>
-      <button class="cell-pin" type="button" aria-label="שמירה כקבוע (חוזר)"
-              title="שמירה כקבוע (חוזר)">📌</button>
+      <button class="cell-recurring" type="button">הגדר חזרה</button>
+      <div class="cell-save-control">
+        <span class="cell-save-status" role="status" aria-live="polite"></span>
+        <button class="cell-close" type="button" aria-label="יציאה ממצב עריכה" title="יציאה ממצב עריכה">×</button>
+      </div>
     </div>
   </form>
   {% endif %}

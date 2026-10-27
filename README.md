@@ -113,10 +113,11 @@ move presence tracking to Redis.
 - **Configurable notes** — `IMPORTANT_NOTE` JSON array (type + heading level).
 - **Slot-linking rules** — `RULES` env var (e.g. Friday-evening ↔ Shabbat
   mirroring); best-effort, failures are logged and skipped.
-- **Recurring templates UI** — the 📌 pin on a cell opens a "save as recurring"
+- **Recurring templates UI** — the "הגדר חזרה" button opens a recurring
   modal (name/note, from-date, until-date = forever by default); new weeks are
   pre-filled from active templates.
-- **Click-to-edit** cells, open editing (`OPEN_EDIT`), actor recorded as
+- **Click-to-edit** cells with automatic saving after 600 ms without typing,
+  progress/success/error indicators, open editing (`OPEN_EDIT`), actor recorded as
   "unknown" until mandatory login is added.
 
 ## Open items (to finalize together)

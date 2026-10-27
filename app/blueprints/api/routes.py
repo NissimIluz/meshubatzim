@@ -5,6 +5,7 @@ from datetime import date
 from flask import (
     current_app,
     flash,
+    jsonify,
     make_response,
     redirect,
     render_template,
@@ -56,7 +57,8 @@ def update_slot():
     # Persisted -> broadcast the new state to everyone viewing this week.
     socketio.emit(
         "slot_updated",
-        {"week": target.isoformat(), "editor": actor, **slot.to_dict()},
+        {"week": target.isoformat(), "editor": actor,
+         "client_id": request.headers.get("X-Client-ID"), **slot.to_dict()},
         room=room,
     )
 
@@ -68,7 +70,10 @@ def update_slot():
             room=room,
         )
 
-    # HTMX swaps the cell with the fresh server-rendered fragment.
+    if request.accept_mimetypes.best == "application/json":
+        return jsonify(week=target.isoformat(), **slot.to_dict())
+
+    # Retain the HTML response for existing clients.
     return render_template(
         "schedule/_cell.html",
         slot=slot,
