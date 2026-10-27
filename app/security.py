@@ -2,8 +2,23 @@
 from __future__ import annotations
 
 from functools import wraps
+from urllib.parse import urlsplit
 
 from flask import abort, current_app, redirect, request, session, url_for
+
+
+def local_redirect_target(value: str | None) -> str:
+    """Accept only absolute local paths, never external redirect targets."""
+    fallback = url_for("schedule.index")
+    if not value or not value.startswith("/") or value.startswith("//"):
+        return fallback
+    if "\\" in value or any(ord(char) < 32 or ord(char) == 127 for char in value):
+        return fallback
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return fallback
+    return fallback if parsed.scheme or parsed.netloc else value
 
 
 def can_edit() -> bool:
@@ -26,7 +41,7 @@ def edit_required(view):
         if not can_edit():
             if request.path.startswith("/api") or request.headers.get("HX-Request"):
                 abort(403)
-            return redirect(url_for("auth.login", next=request.url))
+            return redirect(url_for("auth.login", next=request.full_path))
         return view(*args, **kwargs)
 
     return wrapper

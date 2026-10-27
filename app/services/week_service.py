@@ -1,9 +1,10 @@
 """Week lifecycle: lazy creation (up to N weeks ahead) + recurring pre-fill."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from flask import current_app
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.identity import actor_or_system
@@ -30,7 +31,14 @@ def create_week(
     """Create a week and its slots, pre-filling from recurring templates."""
     week = Week(start_date=start_date, created_by=created_by or actor_or_system())
     db.session.add(week)
-    db.session.flush()  # assign week.id
+    try:
+        db.session.flush()  # assign week.id
+    except IntegrityError:
+        db.session.rollback()
+        existing = get_week(start_date)
+        if existing is None:
+            raise
+        return existing
 
     active_days = current_app.config["ACTIVE_DAYS"]
     shift_names = current_app.config["SHIFT_NAMES"]
@@ -38,7 +46,9 @@ def create_week(
         for shift in shift_names:
             assignee = notes = None
             if apply_recurring:
-                tmpl = recurring_service.get_template_for(day, shift, start_date)
+                tmpl = recurring_service.get_template_for(
+                    day, shift, start_date + timedelta(days=day)
+                )
                 if tmpl:
                     assignee, notes = tmpl.assignee, tmpl.notes
             db.session.add(

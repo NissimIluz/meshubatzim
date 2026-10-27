@@ -7,16 +7,16 @@ from flask import (
     render_template,
     request,
     session,
-    url_for,
 )
 
 from app.blueprints.auth import auth_bp
+from app.security import local_redirect_target
 from app.services.log_service import log_event
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
-    next_url = request.values.get("next") or url_for("schedule.index")
+    next_url = local_redirect_target(request.values.get("next"))
     if request.method == "POST":
         configured = current_app.config["EDIT_PASSWORD"]
         password = request.form.get("password", "")
@@ -32,4 +32,4 @@ def login():
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
     session.pop("can_edit", None)
-    return redirect(request.values.get("next") or url_for("schedule.index"))
+    return redirect(local_redirect_target(request.values.get("next")))

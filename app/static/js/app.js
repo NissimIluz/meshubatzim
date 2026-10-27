@@ -180,8 +180,14 @@
   function setupRealtime(week) {
     if (typeof io === "undefined" || !week) return;
     var socket = io();
+    var hasConnected = false;
 
     socket.on("connect", function () {
+      if (hasConnected) {
+        window.location.reload();
+        return;
+      }
+      hasConnected = true;
       socket.emit("join", { week: week });
     });
     socket.on("presence", function (data) {

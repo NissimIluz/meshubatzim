@@ -9,14 +9,13 @@ from flask import (
     redirect,
     render_template,
     request,
-    url_for,
 )
 
 from app.blueprints.api import api_bp
 from app.extensions import socketio
 from app.identity import current_actor
 from app.realtime import room_for_week
-from app.security import edit_required
+from app.security import edit_required, local_redirect_target
 from app.services import recurring_service, rules_service, slot_service, week_service
 from app.utils.week_utils import parse_date, parse_week_param
 
@@ -110,4 +109,4 @@ def set_recurring():
 
     # No-JS fallback: flash + redirect (full reload).
     flash("נשמר כקבוע (חוזר). יועתק אוטומטית ללוחות חדשים.")
-    return redirect(request.form.get("next") or url_for("schedule.index"))
+    return redirect(local_redirect_target(request.form.get("next")))
